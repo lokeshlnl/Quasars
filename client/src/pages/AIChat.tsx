@@ -1,74 +1,106 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ChatInterface from "@/components/ChatInterface";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Mic, Volume2 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
-// Mock data - remove in production
-const mockMessages = [
-  {
-    id: '1',
-    type: 'user' as const,
-    content: 'My 8-year-old is having trouble focusing at school and seems very restless',
-    timestamp: new Date(Date.now() - 300000),
-  },
-  {
-    id: '2',
-    type: 'ai' as const,
-    content: 'Thank you for sharing. These symptoms could indicate ADHD, but I need more information. How long have you noticed these behaviors? Are they consistent across different settings?',
-    timestamp: new Date(Date.now() - 240000),
-    severity: 'moderate' as const,
-  },
-  {
-    id: '3',
-    type: 'user' as const,
-    content: 'About 6 months now, both at home and school',
-    timestamp: new Date(Date.now() - 180000),
-  },
-  {
-    id: '4',
-    type: 'ai' as const,
-    content: 'Based on your description, I recommend scheduling an appointment with Dr. Sarah Chen, our pediatric neurologist. In the meantime, try creating a structured routine and consider mindfulness exercises.',
-    timestamp: new Date(Date.now() - 120000),
-    severity: 'mild' as const,
-  },
-];
+// Demo configuration - in production this would come from auth/routing
+const DEMO_PATIENT_ID = 'demo-patient-123';
+const DEMO_SESSION_ID = `session-${Date.now()}`;
 
 export default function AIChat() {
-  const [messages, setMessages] = useState(mockMessages);
+  const [messages, setMessages] = useState<any[]>([]);
   const [isOffline, setIsOffline] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId] = useState(DEMO_SESSION_ID);
+  const { toast } = useToast();
+  
+  // Load existing chat messages on component mount
+  useEffect(() => {
+    loadChatHistory();
+  }, []);
+  
+  const loadChatHistory = async () => {
+    try {
+      const response = await apiRequest('GET', `/api/chat/${sessionId}`);
+      const chatMessages = await response.json();
+      const formattedMessages = chatMessages.map((msg: any) => ({
+        id: msg.id,
+        type: msg.type,
+        content: msg.content,
+        timestamp: new Date(msg.createdAt),
+        severity: msg.severity
+      }));
+      setMessages(formattedMessages);
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+    }
+  };
 
-  const handleSendMessage = (content: string) => {
-    const newMessage = {
-      id: Date.now().toString(),
-      type: 'user' as const,
-      content,
-      timestamp: new Date(),
-    };
+  const handleSendMessage = async (content: string) => {
+    if (isLoading) return;
     
-    setMessages(prev => [...prev, newMessage]);
+    setIsLoading(true);
     
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai' as const,
-        content: "I understand your concern. Let me help you with that. Can you provide more details about the symptoms?",
-        timestamp: new Date(),
-        severity: 'mild' as const,
+    try {
+      const response = await apiRequest('POST', '/api/ai-chat', {
+        patientId: DEMO_PATIENT_ID,
+        message: content,
+        sessionId
+      });
+      
+      const result = await response.json();
+      
+      // Add both user and AI messages to the UI
+      const userMessage = {
+        id: result.userMessage.id,
+        type: 'user' as const,
+        content: result.userMessage.content,
+        timestamp: new Date(result.userMessage.createdAt)
       };
-      setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+      
+      const aiMessage = {
+        id: result.aiMessage.id,
+        type: 'ai' as const,
+        content: result.aiMessage.content,
+        timestamp: new Date(result.aiMessage.createdAt),
+        severity: result.aiMessage.severity
+      };
+      
+      setMessages(prev => [...prev, userMessage, aiMessage]);
+      
+      // Show severity-based toast if needed
+      if (result.severity === 'severe') {
+        toast({
+          title: "Important",
+          description: "Please consider seeking immediate medical attention for severe symptoms.",
+          variant: "destructive"
+        });
+      }
+      
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive"
+      });
+      setIsOffline(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const quickQuestions = [
-    "Help with ADHD symptoms",
-    "Autism support resources", 
-    "Medication side effects",
-    "When to see a doctor",
-    "Breathing exercises",
-    "Focus techniques"
+    "My child is having trouble focusing at school",
+    "How can I help with autism sensory issues?", 
+    "Are these ADHD medication side effects normal?",
+    "When should I be concerned about these symptoms?",
+    "Can you teach me breathing exercises?",
+    "What focus techniques work for ADHD?"
   ];
 
   return (
@@ -137,6 +169,11 @@ export default function AIChat() {
             onSendMessage={handleSendMessage}
             isOffline={isOffline}
           />
+          {isLoading && (
+            <div className="text-center text-sm text-muted-foreground mt-4">
+              AI is thinking...
+            </div>
+          )}
         </div>
       </div>
 

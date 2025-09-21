@@ -75,6 +75,20 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeMockData() {
+    // Create demo patient for testing
+    const demoPatient = {
+      name: 'Demo Patient',
+      age: 12,
+      conditionType: 'ADHD',
+      contact: 'demo@example.com',
+      emergencyContact: 'parent@example.com'
+    };
+    
+    const patient = await this.createPatient(demoPatient);
+    // Override the ID to be predictable for demo
+    const demoPatientWithId = { ...patient, id: 'demo-patient-123' };
+    this.patients.set('demo-patient-123', demoPatientWithId);
+    
     // Create mock doctors
     const mockDoctors = [
       {
@@ -129,7 +143,18 @@ export class MemStorage implements IStorage {
     ];
     
     for (const pharmacyData of mockPharmacies) {
-      await this.createPharmacy(pharmacyData);
+      const pharmacy = await this.createPharmacy(pharmacyData);
+      
+      // Add some medication stock for the pharmacies
+      const medications = [
+        { name: 'Methylphenidate (Ritalin)', status: 'in-stock' },
+        { name: 'Aripiprazole (Abilify)', status: 'low-stock' },
+        { name: 'Sertraline (Zoloft)', status: 'out-of-stock' }
+      ];
+      
+      for (const med of medications) {
+        await this.updateMedicationStock(pharmacy.id, med.name, med.status);
+      }
     }
   }
 

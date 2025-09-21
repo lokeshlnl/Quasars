@@ -10,6 +10,9 @@ import {
   insertPharmacySchema
 } from "@shared/schema";
 import { z } from "zod";
+import { HealthcareAIService } from "./ai-service";
+
+const aiService = new HealthcareAIService();
 
 // Enhanced schemas with proper validation
 const enhancedAppointmentSchema = insertAppointmentSchema.extend({
@@ -205,6 +208,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(message);
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid chat message data' });
+    }
+  });
+
+  // AI Chat endpoint
+  app.post('/api/ai-chat', async (req, res) => {
+    try {
+      const { patientId, message, sessionId } = z.object({
+        patientId: z.string(),
+        message: z.string(),
+        sessionId: z.string()
+      }).parse(req.body);
+      
+      // Verify patient exists
+      const patient = await storage.getPatient(patientId);
+      if (!patient) {
+        return res.status(404).json({ error: 'Patient not found' });
+      }
+      
+      // Get chat history for context
+      const chatHistory = await storage.getChatMessagesBySession(sessionId);
+      const formattedHistory = chatHistory.map(msg => ({
+        role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+        content: msg.content
+      }));
+      
+      // Save user message
+      const userMessage = await storage.createChatMessage({
+        patientId,
+        type: 'user',
+        content: message,
+        sessionId
+      });
+      
+      // Generate AI response
+      const aiResult = await aiService.generateResponse(
+        message,
+        formattedHistory,
+        patient.age,
+        patient.conditionType
+      );
+      
+      // Save AI response
+      const aiMessage = await storage.createChatMessage({
+        patientId,
+        type: 'ai',
+        content: aiResult.response,
+        sessionId,
+        severity: aiResult.severity
+      });
+      
+      res.json({
+        userMessage,
+        aiMessage,
+        severity: aiResult.severity
+      });
+    } catch (error) {
+      console.error('AI chat error:', error);
+      res.status(500).json({ error: 'Failed to process AI chat' });
+    }
+  });
+  
+  // Symptom assessment endpoint
+  app.post('/api/assess-symptoms', async (req, res) => {
+    try {
+      const { patientId, symptoms } = z.object({
+        patientId: z.string(),
+        symptoms: z.string()
+      }).parse(req.body);
+      
+      // Verify patient exists
+      const patient = await storage.getPatient(patientId);
+      if (!patient) {
+        return res.status(404).json({ error: 'Patient not found' });
+      }
+      
+      const assessment = await aiService.assessSymptoms(
+        symptoms,
+        patient.age,
+        patient.conditionType
+      );
+      
+      // If professional care is required, suggest doctors
+      let suggestedDoctors: string[] = [];
+      if (assessment.requiresProfessionalCare) {
+        suggestedDoctors = await aiService.suggestDoctors(symptoms, assessment.suggestedDoctor);
+      }
+      
+      res.json({
+        ...assessment,
+        suggestedDoctors
+      });
+    } catch (error) {
+      console.error('Symptom assessment error:', error);
+      res.status(500).json({ error: 'Failed to assess symptoms' });
     }
   });
 

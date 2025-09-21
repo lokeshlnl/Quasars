@@ -1,86 +1,128 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DoctorCard from "@/components/DoctorCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Search, Filter, MapPin } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Search, Filter, MapPin, Calendar } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
-// Mock data - remove in production
-const mockDoctors = [
-  {
-    id: '1',
-    name: 'Dr. Sarah Chen',
-    specialty: 'Pediatric Neurologist',
-    hospital: 'Rural Community Health Center',
-    availability: 'available' as const,
-    nextSlot: 'Today 2:30 PM',
-    distance: '1.2 km',
-    rating: 4.8,
-  },
-  {
-    id: '2',
-    name: 'Dr. Michael Rodriguez',
-    specialty: 'ADHD Specialist',
-    hospital: 'Mountain View Clinic',
-    availability: 'busy' as const,
-    distance: '2.5 km',
-    rating: 4.6,
-  },
-  {
-    id: '3',
-    name: 'Dr. Emily Watson',
-    specialty: 'Family Medicine',
-    hospital: 'Valley Health Services',
-    availability: 'available' as const,
-    nextSlot: 'Tomorrow 9:00 AM',
-    distance: '0.8 km',
-    rating: 4.9,
-  },
-  {
-    id: '4',
-    name: 'Dr. James Kumar',
-    specialty: 'Child Psychology',
-    hospital: 'Autism Support Center',
-    availability: 'available' as const,
-    nextSlot: 'Today 4:00 PM',
-    distance: '3.1 km',
-    rating: 4.7,
-  },
-  {
-    id: '5',
-    name: 'Dr. Lisa Thompson',
-    specialty: 'Psychiatry',
-    hospital: 'Mental Health Clinic',
-    availability: 'offline' as const,
-    distance: '1.8 km',
-    rating: 4.5,
-  },
-];
+// Demo patient ID for appointment booking
+const DEMO_PATIENT_ID = 'demo-patient-123';
+
+interface Doctor {
+  id: string;
+  name: string;
+  specialty: string;
+  hospital: string;
+  phone?: string;
+  isAvailable: boolean;
+  rating?: number;
+  distance?: string;
+}
+
+interface AppointmentData {
+  doctorId: string;
+  appointmentDate: string;
+  type: 'consultation' | 'follow-up' | 'assessment';
+  notes?: string;
+}
 
 export default function DoctorDirectory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>("all");
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [bookingDoctor, setBookingDoctor] = useState<Doctor | null>(null);
+  const [isBooking, setIsBooking] = useState(false);
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    loadDoctors();
+  }, []);
+  
+  const loadDoctors = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiRequest('GET', '/api/doctors');
+      const doctorsData = await response.json();
+      setDoctors(doctorsData);
+    } catch (error) {
+      console.error('Failed to load doctors:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load doctors. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const specialties = ["all", "Pediatric Neurologist", "ADHD Specialist", "Family Medicine", "Child Psychology", "Psychiatry"];
-
-  const filteredDoctors = mockDoctors.filter(doctor => {
+  const getUniqueSpecialties = () => {
+    const specialties = doctors.map(d => d.specialty);
+    return ["all", ...Array.from(new Set(specialties))];
+  };
+  
+  const filteredDoctors = doctors.filter(doctor => {
     const matchesSearch = doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          doctor.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          doctor.hospital.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSpecialty = selectedSpecialty === "all" || doctor.specialty === selectedSpecialty;
-    const matchesAvailability = !showAvailableOnly || doctor.availability === "available";
+    const matchesAvailability = !showAvailableOnly || doctor.isAvailable;
     return matchesSearch && matchesSpecialty && matchesAvailability;
   });
+  
+  const getAvailabilityStatus = (doctor: Doctor): "available" | "offline" => {
+    return doctor.isAvailable ? "available" : "offline";
+  };
+  
+  const getNextSlot = (doctor: Doctor): string | undefined => {
+    if (!doctor.isAvailable) return undefined;
+    // In a real app, this would come from a calendar API
+    const slots = ["Today 2:30 PM", "Tomorrow 9:00 AM", "Today 4:00 PM", "Tomorrow 11:30 AM"];
+    return slots[Math.floor(Math.random() * slots.length)];
+  };
 
-  const handleDoctorClick = (doctor: any) => {
+  const handleDoctorClick = (doctor: Doctor) => {
     console.log('Doctor profile:', doctor);
     // Navigate to doctor detail page
   };
 
-  const handleBooking = (doctor: any) => {
-    console.log('Booking appointment with:', doctor.name);
-    // Open booking modal or navigate to booking page
+  const handleBooking = (doctor: Doctor) => {
+    setBookingDoctor(doctor);
+  };
+  
+  const bookAppointment = async (appointmentData: AppointmentData) => {
+    try {
+      setIsBooking(true);
+      
+      const response = await apiRequest('POST', '/api/appointments', {
+        patientId: DEMO_PATIENT_ID,
+        ...appointmentData
+      });
+      
+      const appointment = await response.json();
+      
+      toast({
+        title: "Appointment Booked",
+        description: `Your appointment with Dr. ${bookingDoctor?.name} has been scheduled.`,
+      });
+      
+      setBookingDoctor(null);
+      
+    } catch (error) {
+      console.error('Failed to book appointment:', error);
+      toast({
+        title: "Booking Failed",
+        description: "Failed to book appointment. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   return (
@@ -116,7 +158,7 @@ export default function DoctorDirectory() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {specialties.map((specialty) => (
+            {getUniqueSpecialties().map((specialty) => (
               <Button
                 key={specialty}
                 variant={selectedSpecialty === specialty ? "default" : "outline"}
@@ -158,7 +200,12 @@ export default function DoctorDirectory() {
       <div className="p-6">
         <div className="max-w-4xl mx-auto">
           <div className="space-y-4">
-            {filteredDoctors.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading doctors...</p>
+              </div>
+            ) : filteredDoctors.length === 0 ? (
               <div className="text-center py-12">
                 <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                 <h3 className="text-lg font-semibold mb-2">No doctors found</h3>
@@ -171,10 +218,10 @@ export default function DoctorDirectory() {
                   name={doctor.name}
                   specialty={doctor.specialty}
                   hospital={doctor.hospital}
-                  availability={doctor.availability}
-                  nextSlot={doctor.nextSlot}
+                  availability={getAvailabilityStatus(doctor)}
+                  nextSlot={getNextSlot(doctor)}
                   distance={doctor.distance}
-                  rating={doctor.rating}
+                  rating={doctor.rating ? doctor.rating / 10 : undefined}
                   onClick={() => handleDoctorClick(doctor)}
                   onBooking={() => handleBooking(doctor)}
                 />
@@ -183,6 +230,20 @@ export default function DoctorDirectory() {
           </div>
         </div>
       </div>
+      
+      {/* Booking Modal */}
+      <Dialog open={!!bookingDoctor} onOpenChange={() => setBookingDoctor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Book Appointment</DialogTitle>
+          </DialogHeader>
+          <BookingForm
+            doctor={bookingDoctor}
+            onSubmit={bookAppointment}
+            isLoading={isBooking}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

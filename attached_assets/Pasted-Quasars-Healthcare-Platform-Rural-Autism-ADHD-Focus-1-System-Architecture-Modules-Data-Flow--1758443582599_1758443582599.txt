@@ -1,0 +1,122 @@
+Quasars Healthcare Platform (Rural + Autism/ADHD Focus)
+1) System Architecture (Modules + Data Flow)
+Frontend (App)
+
+Mobile-first PWA or Flutter app (installable, offline-friendly).
+
+Modules:
+
+Patient registration/login
+
+Dashboard (records, history, appointments)
+
+Doctor directory & booking
+
+AI bot (chat + voice)
+
+Pharmacy module (medicine availability)
+
+Backend
+
+Database (secure EHR-like): PostgreSQL (Supabase) or Firebase Firestore.
+
+APIs:
+
+Patient records (CRUD)
+
+Doctor list (hospital-specific)
+
+Appointment booking (with history)
+
+Pharmacy stock API (connect local stores / manual updates)
+
+AI assistant API (OpenAI or open-source LLM fine-tuned for health triage)
+
+AI Assistant
+
+Input: patient’s reported symptoms (via text/voice).
+
+Process: classify severity → suggest solutions (breathing exercise, ADHD-friendly focus session, stress relief) OR recommend doctor visit.
+
+Output: local-language text/audio.
+
+Offline-first Behavior
+
+Registration & records cached locally, syncs when online.
+
+AI bot limited offline (only preloaded sessions/resources).
+
+2) UI / User Journey Flows
+Flow A: Registration → Dashboard
+
+Language Select (with audio option).
+
+Patient Registration: Name, age, condition type (Autism, ADHD, Other), contact.
+
+Dashboard (Home):
+
+Records card (see health history).
+
+Doctors card (directory & booking).
+
+AI bot card.
+
+Medicines card (availability).
+
+Flow B: Patient Records
+
+Tap “Records” → view personal history (visits, prescriptions, appointments).
+
+Simple timeline view (big icons + dates).
+
+Flow C: Doctor Directory & Appointment
+
+Doctor List Screen: show doctors by hospital with specialty, availability.
+
+Booking: patient picks doctor + slot → confirmation.
+
+Dashboard update: appointment history stored with status (upcoming/past).
+
+Flow D: AI Bot
+
+Patient taps “Ask AI”.
+
+Chat/voice interface (large text + mic button):
+
+AI asks symptom → patient replies.
+
+AI checks severity & responds:
+
+Mild: suggest self-help (exercise, ADHD session, etc.).
+
+Severe: recommend booking doctor (with “Book Now” button).
+
+Bot can also run guided sessions (like Quasars had earlier).
+
+Flow E: Pharmacy Stock
+
+Tap “Medicines” → search by name OR browse categories.
+
+List of nearby pharmacies with stock status (Green = available, Red = out).
+
+Optional: direct call button to pharmacy.
+
+3) Design Principles (for Rural Users)
+
+Big cards on home screen (4 main options).
+
+Icons + text + audio narration for each action.
+
+Offline-ready UI: clear “last synced” badge.
+
+Minimal typing: dropdowns, icons, mic input.
+
+Local-language support.
+
+4) Quick Sketch (Textual UI Layout)
+
+Home (4 cards):
+[📄 Records] [👨‍⚕️ Doctors]
+[🤖 AI Bot] [💊 Medicines]
+
+Each card opens into its flow (simple navigation, single tap).
